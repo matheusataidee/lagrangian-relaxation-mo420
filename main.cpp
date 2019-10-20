@@ -3,12 +3,6 @@
 
 using namespace std;
 
-#define MAXN 1010
-
-int min_number_of_branches;
-vector<double> lambda;
-vector<vector<int> > g;
-
 void printGraph(vector<vector<int> >& graph) {
     for (int i = 0; i < graph.size(); i++) {
         cout << i << ": ";
@@ -19,11 +13,11 @@ void printGraph(vector<vector<int> >& graph) {
     }
 }
 
-bool testGraph(vector<vector<int> >& myg) {
-    if ((int)myg.size() != (int)g.size()) return false;
-    for (int i = 0; i < (int)g.size(); i++) {
+bool testGraph(vector<vector<int> >& original_graph, vector<vector<int> >& myg) {
+    if ((int)myg.size() != (int)original_graph.size()) return false;
+    for (int i = 0; i < (int)original_graph.size(); i++) {
         set<int> myset;
-        for (int j = 0; j < g[i].size(); j++) myset.insert(g[i][j]);
+        for (int j = 0; j < original_graph[i].size(); j++) myset.insert(original_graph[i][j]);
         for (int j = 0; j < myg[i].size(); j++) {
             if (myset.find(myg[i][j]) == myset.end()) return false;
             myset.erase(myg[i][j]);
@@ -43,7 +37,7 @@ bool testGraph(vector<vector<int> >& myg) {
             }
         }
     }
-    for (int i = 0; i < (int)g.size(); i++) {
+    for (int i = 0; i < (int)original_graph.size(); i++) {
         if (!used[i]) return false;
     }
     return true;
@@ -57,34 +51,31 @@ int getNumberOfBranchs(vector<vector<int> >& graph) {
     return ret;
 }
 
-double getLagrangeRelaxation() {
-    vector<vector<int> > mst = getMSTree(g, lambda);
-    vector<double> subgradient(g.size(), 0);
+pair<double, int> getLagrangeRelaxation(vector<vector<int> >& original_graph, vector<double>& lambda, vector<vector<int> >& primal_best) {
+    vector<vector<int> > mst = getMSTree(original_graph, lambda);
+    vector<double> subgradient(original_graph.size(), 0);
 
-    double precision_parameter = 0.0;
-    double subgradient_square_sum = 0.0;
-    double ret = 0.0;
+    pair<double, int> ret{0.0, 0};
 
-    for (int i = 0; i < (int)g.size(); i++) {
-        if ((int)g[i].size() <= 2) continue;
-        ret += -2 * lambda[i];
+    for (int i = 0; i < (int)original_graph.size(); i++) {
+        if ((int)original_graph[i].size() <= 2) continue;
+        ret.first += -2 * lambda[i];
         subgradient[i] = -2;
-        if (lambda[i] * (int)g[i].size() > 1) {
-            ret += 1 - lambda[i] * (int)g[i].size();
-            subgradient[i] -= g[i].size();
+        if (lambda[i] * (int)original_graph[i].size() > 1) {
+            ret.first += 1 - lambda[i] * (int)original_graph[i].size();
+            subgradient[i] -= original_graph[i].size();
         }
-        ret += lambda[i] * mst[i].size();
+        ret.first += lambda[i] * mst[i].size();
         subgradient[i] += mst[i].size();
-        precision_parameter += lambda[i] * -subgradient[i];
-        subgradient_square_sum += subgradient[i] * subgradient[i];
     }
-    double stepsize = precision_parameter * ((double)min_number_of_branches - ret / subgradient_square_sum);
 
-    for (int i = 0; i < (int)g.size(); i++) {
-        lambda[i] += stepsize * subgradient[i];
-        //lambda[i] += 0.1 * subgradient[i];
+    for (int i = 0; i < (int)original_graph.size(); i++) {
+        lambda[i] += 0.001 * subgradient[i];
         lambda[i] = max((double)0, lambda[i]);
-        lambda[i] = min((double)1 / (double)g[i].size(), lambda[i]);
+    }
+    ret.second = getNumberOfBranchs(mst);
+    if (ret.second < getNumberOfBranchs(primal_best)) {
+        primal_best = mst;
     }
     return ret;
 }
@@ -97,9 +88,12 @@ int main(int argc, char** argv) {
     ifstream fin(argv[1]);
     int n, m;
     fin >> n >> m;
-    min_number_of_branches = n;
-    g = vector<vector<int> >(n);
-    lambda = vector<double>(n);
+
+    int min_number_of_branches = n;
+    double max_dual = numeric_limits<float>::min();
+    vector<vector<int> > g(n);
+    vector<double> lambda(n);
+
     for (int i = 0; i < m; i++) {
         int a, b;
         fin >> a >> b;
@@ -119,14 +113,18 @@ int main(int argc, char** argv) {
 
 
     vector<vector<int> > primal_best = getHeuristicTree(g);
-    vector<vector<int> > mst_g = getMSTree(g, lambda);
-    printGraph(primal_best);
-    if (testGraph(primal_best)) cout << "OK" << endl;
-    printGraph(mst_g);
-    if (testGraph(mst_g)) cout << "OK" << endl;
+    min_number_of_branches = getNumberOfBranchs(primal_best);
 
-    for (int i = 0; i < 150; i++) {
-        cout << "lagrangian relax: " << getLagrangeRelaxation() << endl;
+    for (int i = 0; i < 15000; i++) {
+        pair<double, int> dual_primal = getLagrangeRelaxation(g, lambda, primal_best);
+        if (dual_primal.first > max_dual) {
+            max_dual = dual_primal.first;
+        }
+        if (dual_primal.second < min_number_of_branches) {
+            min_number_of_branches = dual_primal.second;
+        }
+        cout << "lagrangian relax: " << dual_primal.first << " " << dual_primal.second << endl;
     }
+    cout << max_dual << " " << min_number_of_branches << endl;
     return 0;
 }
