@@ -5,6 +5,7 @@ using namespace std;
 
 #define MAXN 1010
 
+int min_number_of_branches;
 vector<double> lambda;
 vector<vector<int> > g;
 
@@ -48,6 +49,46 @@ bool testGraph(vector<vector<int> >& myg) {
     return true;
 }
 
+int getNumberOfBranchs(vector<vector<int> >& graph) {
+    int ret = 0 ;
+    for (int i = 0; i < (int)graph.size(); i++) {
+        if (graph[i].size() > 2) ret++;
+    }
+    return ret;
+}
+
+double getLagrangeRelaxation() {
+    vector<vector<int> > mst = getMSTree(g, lambda);
+    vector<double> subgradient(g.size(), 0);
+
+    double precision_parameter = 0.0;
+    double subgradient_square_sum = 0.0;
+    double ret = 0.0;
+
+    for (int i = 0; i < (int)g.size(); i++) {
+        if ((int)g[i].size() <= 2) continue;
+        ret += -2 * lambda[i];
+        subgradient[i] = -2;
+        if (lambda[i] * (int)g[i].size() > 1) {
+            ret += 1 - lambda[i] * (int)g[i].size();
+            subgradient[i] -= g[i].size();
+        }
+        ret += lambda[i] * mst[i].size();
+        subgradient[i] += mst[i].size();
+        precision_parameter += lambda[i] * -subgradient[i];
+        subgradient_square_sum += subgradient[i] * subgradient[i];
+    }
+    double stepsize = precision_parameter * ((double)min_number_of_branches - ret / subgradient_square_sum);
+
+    for (int i = 0; i < (int)g.size(); i++) {
+        lambda[i] += stepsize * subgradient[i];
+        //lambda[i] += 0.1 * subgradient[i];
+        lambda[i] = max((double)0, lambda[i]);
+        lambda[i] = min((double)1 / (double)g[i].size(), lambda[i]);
+    }
+    return ret;
+}
+
 int main(int argc, char** argv) {
     if (argc < 2) {
         printf("Usage: ./main <INPUT INSTANCE>\n");
@@ -56,8 +97,9 @@ int main(int argc, char** argv) {
     ifstream fin(argv[1]);
     int n, m;
     fin >> n >> m;
+    min_number_of_branches = n;
     g = vector<vector<int> >(n);
-    lambda = vector<double>(n, 0.5);
+    lambda = vector<double>(n);
     for (int i = 0; i < m; i++) {
         int a, b;
         fin >> a >> b;
@@ -65,11 +107,26 @@ int main(int argc, char** argv) {
         g[a].push_back(b);
         g[b].push_back(a);
     }
+    transform(g.begin(), g.end(), lambda.begin(), []
+        (vector<int>& p) {
+            if (p.size() <= 2) {
+                return 0.0;
+            } else {
+                return (double)1 / (double)(2 * p.size());
+            }
+        });
+    
+
+
     vector<vector<int> > primal_best = getHeuristicTree(g);
     vector<vector<int> > mst_g = getMSTree(g, lambda);
     printGraph(primal_best);
     if (testGraph(primal_best)) cout << "OK" << endl;
     printGraph(mst_g);
     if (testGraph(mst_g)) cout << "OK" << endl;
+
+    for (int i = 0; i < 150; i++) {
+        cout << "lagrangian relax: " << getLagrangeRelaxation() << endl;
+    }
     return 0;
 }
