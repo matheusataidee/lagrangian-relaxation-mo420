@@ -81,16 +81,20 @@ pair<double, int> getLagrangeRelaxation(vector<vector<int> >& original_graph, ve
 }
 
 int main(int argc, char** argv) {
-    if (argc < 2) {
-        printf("Usage: ./main <INPUT INSTANCE>\n");
+    if (argc < 4) {
+        printf("Usage: ./main <INPUT INSTANCE> <OUTPUT FILE> <TIME LIMIT>\n");
         return -1;
     }
     ifstream fin(argv[1]);
+    ofstream fout(argv[2]);
+    double time_limit = atof(argv[3]);
+
     int n, m;
     fin >> n >> m;
 
     int min_number_of_branches = n;
     double max_dual = numeric_limits<float>::min();
+    int min_primal_it = -1, max_dual_it = -1;
     vector<vector<int> > g(n);
     vector<double> lambda(n);
 
@@ -115,16 +119,40 @@ int main(int argc, char** argv) {
     vector<vector<int> > primal_best = getHeuristicTree(g);
     min_number_of_branches = getNumberOfBranchs(primal_best);
 
-    for (int i = 0; i < 15000; i++) {
+    chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
+    int n_iterations = 0;
+    for (n_iterations = 0; ; n_iterations++) {
         pair<double, int> dual_primal = getLagrangeRelaxation(g, lambda, primal_best);
         if (dual_primal.first > max_dual) {
+            max_dual_it = n_iterations;
             max_dual = dual_primal.first;
         }
         if (dual_primal.second < min_number_of_branches) {
+            min_primal_it = n_iterations;
             min_number_of_branches = dual_primal.second;
         }
-        cout << "lagrangian relax: " << dual_primal.first << " " << dual_primal.second << endl;
+        chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
+        chrono::duration<double> time_span = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
+        if (time_span.count() > time_limit) break;
     }
-    cout << max_dual << " " << min_number_of_branches << endl;
+    fout << fixed;
+    fout << setprecision(6);
+    fout << max_dual << endl;
+    fout << max_dual_it << endl;
+    fout << min_number_of_branches << endl;
+    fout << min_primal_it << endl;
+    fout << n_iterations << endl;
+
+    set<pair<int, int> > myset;
+    for (int i = 0; i < primal_best.size(); i++) {
+        for (int j = 0; j < primal_best[i].size(); j++) {
+            int from = i, to = primal_best[i][j];
+            myset.insert({min(to, from), max(to, from)});
+        }
+    }
+    for (auto& p: myset) {
+        fout << p.first << " " << p.second << endl;
+    }
+
     return 0;
 }
