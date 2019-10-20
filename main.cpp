@@ -5,6 +5,7 @@ using namespace std;
 
 #define MAXN 1010
 
+vector<double> lambda;
 vector<vector<int> > g;
 
 void printGraph(vector<vector<int> >& graph) {
@@ -56,6 +57,7 @@ int main(int argc, char** argv) {
     int n, m;
     fin >> n >> m;
     g = vector<vector<int> >(n);
+    lambda = vector<double>(n, 0.5);
     for (int i = 0; i < m; i++) {
         int a, b;
         fin >> a >> b;
@@ -64,7 +66,10 @@ int main(int argc, char** argv) {
         g[b].push_back(a);
     }
     vector<vector<int> > primal_best = getHeuristicTree(g);
+    vector<vector<int> > mst_g = getMSTree(g, lambda);
     printGraph(primal_best);
     if (testGraph(primal_best)) cout << "OK" << endl;
+    printGraph(mst_g);
+    if (testGraph(mst_g)) cout << "OK" << endl;
     return 0;
 }
